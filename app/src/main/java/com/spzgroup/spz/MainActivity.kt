@@ -70,8 +70,8 @@ enum class AppDestinations(
     val icon: Int,
 ) {
     HOME("Home", R.drawable.ic_home),
-    FAVORITES("Favorites", R.drawable.ic_favorite),
-    PROFILE("Profile", R.drawable.ic_account_box),
+    AUDIOBOOKS("Audiobooks", R.drawable.ic_headset),
+    LIBRARY("Library", R.drawable.ic_book),
 }
 
 @Composable
