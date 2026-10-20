@@ -75,7 +75,7 @@ enum class AppDestinations(
 )
 {
     HOME("Home", R.drawable.ic_home),
-    PLAYER("Player", R.drawable.ic_favorite), // Placeholder for Player
+    PLAYER("Player", R.drawable.baseline_play_arrow_24), // Placeholder for Player
     LIBRARY("Library", R.drawable.ic_account_box) // Placeholder for Library
 }
 
