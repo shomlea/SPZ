@@ -22,7 +22,7 @@ class LibraryViewModel(private val repository: AppRepository) : ViewModel() {
     val books: StateFlow<List<Book>> =
         repository.books.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // The book whose dialog is open, or null when no dialog is shown
+    // The book whose details dialog is open, or null when no dialog is shown
     private val _selectedBook = MutableStateFlow<Book?>(null)
     val selectedBook: StateFlow<Book?> = _selectedBook.asStateFlow()
 
@@ -60,6 +60,7 @@ class LibraryViewModel(private val repository: AppRepository) : ViewModel() {
             _message.value = when (repository.importBook(uri)) {
                 ImportResult.SUCCESS -> "Book imported"
                 ImportResult.DUPLICATE -> "This book is already in your library"
+                ImportResult.UNSUPPORTED -> "Only PDF, EPUB and audio files are supported"
                 ImportResult.FAILED -> "Could not import this file"
             }
         }
