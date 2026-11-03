@@ -1,5 +1,6 @@
 package com.spzgroup.spz
 
+import android.app.Application
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -23,6 +24,17 @@ import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import com.spzgroup.spz.ui.theme.SPZTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
+import com.spzgroup.spz.data.AppDatabase
+import com.spzgroup.spz.data.AppRepository
+
+
+class SpzApplication : Application() {
+
+    val repository: AppRepository by lazy {
+        AppRepository(AppDatabase.create(this), this)
+    }
+}
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
