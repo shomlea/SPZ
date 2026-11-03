@@ -12,7 +12,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-enum class ImportResult { SUCCESS, DUPLICATE, FAILED }
+enum class ImportResult { SUCCESS, DUPLICATE, UNSUPPORTED, FAILED }
 
 // The only place that talks to the DAOs and to the file system.
 // ViewModels go through this class.
@@ -28,13 +28,25 @@ class AppRepository(
 
     val books: Flow<List<Book>> = bookDao.getAll()
     val bookCount: Flow<Int> = bookDao.count()
+    val lastOpenedBook: Flow<Book?> = bookDao.getLastOpened()
+
+    suspend fun getBook(bookId: Long): Book? = bookDao.getById(bookId)
+
+    suspend fun markOpened(bookId: Long) = bookDao.markOpened(bookId, System.currentTimeMillis())
+
+    // position = page, chapter or milliseconds, totalUnits = how many of them the book has
+    suspend fun saveProgress(bookId: Long, position: Long, totalUnits: Long) =
+        bookDao.updateProgress(bookId, position, totalUnits)
 
     suspend fun increasePosition(bookId: Long) = bookDao.increasePosition(bookId)
 
     suspend fun deleteBook(book: Book) {
         bookDao.delete(book)
         if (book.filePath.isNotEmpty()) {
-            withContext(Dispatchers.IO) { File(book.filePath).delete() }
+            withContext(Dispatchers.IO) {
+                File(book.filePath).delete()
+                epubFolder(book).deleteRecursively()
+            }
         }
     }
 
@@ -50,19 +62,45 @@ class AppRepository(
 
     fun todayProgress(): Flow<DailyProgress?> = progressDao.observe(today())
 
-    suspend fun addReadingMinutes(minutes: Int) {
+    suspend fun addReadingMinutes(minutes: Int) = addMinutes(reading = minutes, listening = 0)
+
+    suspend fun addListeningMinutes(minutes: Int) = addMinutes(reading = 0, listening = minutes)
+
+    private suspend fun addMinutes(reading: Int, listening: Int) {
         val date = today()
         val existing = progressDao.get(date)
         if (existing == null) {
-            progressDao.insert(DailyProgress(date = date, readingMinutes = minutes))
+            progressDao.insert(
+                DailyProgress(date = date, readingMinutes = reading, listeningMinutes = listening)
+            )
         } else {
-            progressDao.update(existing.copy(readingMinutes = existing.readingMinutes + minutes))
+            progressDao.update(
+                existing.copy(
+                    readingMinutes = existing.readingMinutes + reading,
+                    listeningMinutes = existing.listeningMinutes + listening
+                )
+            )
         }
     }
 
     // java.time needs API 26 and our minSdk is 24, so we use SimpleDateFormat
     private fun today(): String =
         SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+
+    // --- EPUB ---
+
+    // Unzips the EPUB (only the first time) and returns its chapters in reading order.
+    // Returns an empty list if the file is broken.
+    suspend fun loadEpubChapters(book: Book): List<File> = withContext(Dispatchers.IO) {
+        try {
+            EpubReader.open(File(book.filePath), epubFolder(book))
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    // The folder name comes from the copied file, which is unique for every import
+    private fun epubFolder(book: Book) = File(context.filesDir, "epub/${File(book.filePath).name}")
 
     // --- Import from the phone ---
 
@@ -71,8 +109,8 @@ class AppRepository(
         val resolver = context.contentResolver
         val fileName = (getFileName(uri) ?: "Unknown book").replace("/", "_")
         val title = fileName.substringBeforeLast(".")
-        val mimeType = resolver.getType(uri) ?: ""
-        val mediaType = if (mimeType.startsWith("audio/")) "AUDIOBOOK" else "EBOOK"
+        val format = detectFormat(fileName) ?: return@withContext ImportResult.UNSUPPORTED
+        val mediaType = if (format == "AUDIO") "AUDIOBOOK" else "EBOOK"
 
         val booksDir = File(context.filesDir, "books")
         booksDir.mkdirs()
@@ -101,6 +139,7 @@ class AppRepository(
                 Book(
                     title = title,
                     mediaType = mediaType,
+                    format = format,
                     filePath = target.absolutePath,
                     fileSizeBytes = size
                 )
@@ -112,6 +151,15 @@ class AppRepository(
         }
     }
 
+    // Some phones report EPUB files as generic data, so we decide by the file extension
+    private fun detectFormat(fileName: String): String? =
+        when (fileName.substringAfterLast('.', "").lowercase()) {
+            "pdf" -> "PDF"
+            "epub" -> "EPUB"
+            "mp3", "m4a", "m4b", "aac", "ogg", "wav", "flac" -> "AUDIO"
+            else -> null
+        }
+
     private fun getFileName(uri: Uri): String? {
         val cursor = context.contentResolver.query(
             uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null
@@ -121,4 +169,3 @@ class AppRepository(
         }
     }
 }
-

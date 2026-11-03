@@ -31,16 +31,29 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.spzgroup.spz.data.Book
 import com.spzgroup.spz.data.Reflection
+import com.spzgroup.spz.ui.progressLabel
 
-private val BOOK_MIME_TYPES = arrayOf("application/epub+zip", "application/pdf", "audio/*")
+// Files the picker offers. Generic data is included because some phones
+// report EPUB files that way; unsupported files are rejected after picking.
+private val BOOK_MIME_TYPES = arrayOf(
+    "application/pdf",
+    "application/epub+zip",
+    "audio/*",
+    "application/octet-stream"
+)
 
 @Composable
-fun LibraryScreen(viewModel: LibraryViewModel, modifier: Modifier = Modifier) {
+fun LibraryScreen(
+    viewModel: LibraryViewModel,
+    onOpenBook: (Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
     val books by viewModel.books.collectAsState()
     val selectedBook by viewModel.selectedBook.collectAsState()
     val reflections by viewModel.reflections.collectAsState()
@@ -76,15 +89,23 @@ fun LibraryScreen(viewModel: LibraryViewModel, modifier: Modifier = Modifier) {
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(books, key = { it.id }) { book ->
+                // Tap the card to open the book, tap "Details" for reflections and delete
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { viewModel.selectBook(book) }
+                        .clickable { onOpenBook(book.id) }
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(book.title, style = MaterialTheme.typography.titleMedium)
-                        val author = book.author.ifEmpty { "Unknown author" }
-                        Text("$author · ${book.mediaType}")
+                    Row(
+                        modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp, end = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(book.title, style = MaterialTheme.typography.titleMedium)
+                            Text(bookDetails(book))
+                        }
+                        TextButton(onClick = { viewModel.selectBook(book) }) {
+                            Text("Details")
+                        }
                     }
                 }
             }
@@ -102,6 +123,14 @@ fun LibraryScreen(viewModel: LibraryViewModel, modifier: Modifier = Modifier) {
     }
 }
 
+// "Author · PDF · Page 3 of 120", skipping the parts that are empty
+private fun bookDetails(book: Book): String =
+    listOf(
+        book.author.ifEmpty { "Unknown author" },
+        book.format.ifEmpty { book.mediaType },
+        book.progressLabel()
+    ).filter { it.isNotEmpty() }.joinToString(" · ")
+
 @Composable
 private fun ReflectionDialog(
     book: Book,
@@ -110,6 +139,7 @@ private fun ReflectionDialog(
     onDelete: () -> Unit,
     onClose: () -> Unit
 ) {
+    // Form state lives only while the dialog is open
     var text by remember(book.id) { mutableStateOf("") }
     var rating by remember(book.id) { mutableIntStateOf(5) }
 
@@ -120,6 +150,7 @@ private fun ReflectionDialog(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("How did this book stay with you?")
 
+                // Tap a star to set the rating
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     for (value in 1..5) {
                         Text(
@@ -156,7 +187,7 @@ private fun ReflectionDialog(
             TextButton(
                 onClick = {
                     onSave(text, rating)
-                    text = ""
+                    text = "" // clear the field for the next reflection
                 },
                 enabled = text.isNotBlank()
             ) {

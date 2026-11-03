@@ -6,15 +6,19 @@ Imported book files are copied into the app's private storage (`filesDir/books/`
 ## Schema
 
 ### books
-| Column        | Type    | Notes                                     |
-|---------------|---------|-------------------------------------------|
-| id            | INTEGER | primary key, auto-generated               |
-| title         | TEXT    | file name without extension when imported |
-| author        | TEXT    | empty for imported books                  |
-| mediaType     | TEXT    | `EBOOK` or `AUDIOBOOK`                    |
-| filePath      | TEXT    | path of the copied file, empty for samples|
-| fileSizeBytes | INTEGER | used to detect duplicates                 |
-| position      | INTEGER | current page / position, starts at 0      |
+| Column        | Type    | Notes                                                    |
+|---------------|---------|----------------------------------------------------------|
+| id            | INTEGER | primary key, auto-generated                              |
+| title         | TEXT    | file name without extension when imported                |
+| author        | TEXT    | empty for imported books                                 |
+| mediaType     | TEXT    | `EBOOK` or `AUDIOBOOK`                                   |
+| format        | TEXT    | `PDF`, `EPUB` or `AUDIO` (empty for the sample books)    |
+| filePath      | TEXT    | path of the copied file, empty for samples               |
+| fileSizeBytes | INTEGER | used to detect duplicates                                |
+| position      | INTEGER | PDF page, EPUB chapter or audio position in ms           |
+| totalUnits    | INTEGER | number of pages or chapters, or audio length in ms       |
+| lastOpenedAt  | INTEGER | time of the last opening, 0 if never opened              |
+| coverPath     | TEXT    | reserved for covers, not used yet                        |
 
 ### reflections
 | Column | Type    | Notes                                         |
@@ -64,8 +68,9 @@ The two sample books are inserted once, when the database is first created.
 ```
 
 ## Where each table is used
-| Screen  | Reads                         | Writes                                  |
-|---------|-------------------------------|-----------------------------------------|
-| Home    | books (count), daily_progress | daily_progress (+5 reading minutes)     |
-| Player  | books                         | books.position (Next page)              |
-| Library | books, reflections            | books (import, delete), reflections     |
+| Screen  | Reads                         | Writes                                              |
+|---------|-------------------------------|-----------------------------------------------------|
+| Home    | books (count), daily_progress | daily_progress (+5 reading minutes)                 |
+| Player  | books (last opened)           | nothing, it opens the last book                     |
+| Library | books, reflections            | books (import, delete), reflections                 |
+| Readers | books                         | books (progress), daily_progress (reading/listening)|
