@@ -1,6 +1,5 @@
 package com.spzgroup.spz
 
-import android.app.Application
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,40 +17,39 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.tooling.preview.PreviewScreenSizes
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.spzgroup.spz.ui.AppViewModelFactory
+import com.spzgroup.spz.ui.home.HomeScreen
+import com.spzgroup.spz.ui.home.HomeViewModel
+import com.spzgroup.spz.ui.library.LibraryScreen
+import com.spzgroup.spz.ui.library.LibraryViewModel
+import com.spzgroup.spz.ui.player.PlayerScreen
+import com.spzgroup.spz.ui.player.PlayerViewModel
 import com.spzgroup.spz.ui.theme.SPZTheme
-import androidx.compose.foundation.layout.Box
-import androidx.compose.ui.Alignment
-import com.spzgroup.spz.data.AppDatabase
-import com.spzgroup.spz.data.AppRepository
-
-
-class SpzApplication : Application() {
-
-    val repository: AppRepository by lazy {
-        AppRepository(AppDatabase.create(this), this)
-    }
-}
-
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        val repository = (application as SpzApplication).repository
+        val factory = AppViewModelFactory(repository)
+
         setContent {
             SPZTheme {
-                SPZApp()
+                SPZApp(factory)
             }
         }
     }
 }
 
-@PreviewScreenSizes
 @Composable
-fun SPZApp() {
+fun SPZApp(factory: AppViewModelFactory) {
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.HOME) }
+
+    val homeViewModel: HomeViewModel = viewModel(factory = factory)
+    val playerViewModel: PlayerViewModel = viewModel(factory = factory)
+    val libraryViewModel: LibraryViewModel = viewModel(factory = factory)
 
     NavigationSuiteScaffold(
         navigationSuiteItems = {
@@ -71,11 +69,11 @@ fun SPZApp() {
         }
     ) {
         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-            // Switch between screens based on the currentDestination state
+            val screenModifier = Modifier.padding(innerPadding)
             when (currentDestination) {
-                AppDestinations.HOME -> HomeScreen(modifier = Modifier.padding(innerPadding))
-                AppDestinations.PLAYER -> PlayerScreen(modifier = Modifier.padding(innerPadding))
-                AppDestinations.LIBRARY -> LibraryScreen(modifier = Modifier.padding(innerPadding))
+                AppDestinations.HOME -> HomeScreen(homeViewModel, screenModifier)
+                AppDestinations.PLAYER -> PlayerScreen(playerViewModel, screenModifier)
+                AppDestinations.LIBRARY -> LibraryScreen(libraryViewModel, screenModifier)
             }
         }
     }
@@ -86,38 +84,6 @@ enum class AppDestinations(
     val icon: Int,
 ) {
     HOME("Home", R.drawable.ic_home),
-    PLAYER("Player", R.drawable.baseline_play_arrow_24), 
-    LIBRARY("Library", R.drawable.ic_book)
-}
-
-// Component 1: Home / Dashboard Fragment
-@Composable
-fun HomeScreen(modifier: Modifier = Modifier) {
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(text = "Home Screen: Daily Progress Rings and Timers will go here.")
-    }
-}
-
-// Component 2: Media Consumption Activity (Reader & Player)
-@Composable
-fun PlayerScreen(modifier: Modifier = Modifier) {
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(text = "Player Screen: Audio Player and Ebook Reader with Hardware Sensors.")
-    }
-}
-
-// Component 3: Library & Reflection Fragment
-@Composable
-fun LibraryScreen(modifier: Modifier = Modifier) {
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(text = "Library Screen: Downloaded Books and Learning Mode Reflections.")
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun SPZAppPreview() {
-    SPZTheme {
-        SPZApp()
-    }
+    PLAYER("Player", R.drawable.baseline_play_arrow_24),
+    LIBRARY("Library", R.drawable.ic_account_box)
 }
