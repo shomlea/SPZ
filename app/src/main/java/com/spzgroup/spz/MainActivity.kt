@@ -72,11 +72,10 @@ fun SPZApp() {
 enum class AppDestinations(
     val label: String,
     val icon: Int,
-)
-{
+) {
     HOME("Home", R.drawable.ic_home),
-    PLAYER("Player", R.drawable.baseline_play_arrow_24), // Placeholder for Player
-    LIBRARY("Library", R.drawable.ic_account_box) // Placeholder for Library
+    PLAYER("Player", R.drawable.baseline_play_arrow_24), 
+    LIBRARY("Library", R.drawable.ic_book)
 }
 
 // Component 1: Home / Dashboard Fragment
