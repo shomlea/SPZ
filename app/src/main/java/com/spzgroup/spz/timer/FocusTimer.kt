@@ -16,11 +16,12 @@ data class FocusTimerState(
     val mode: FocusMode = FocusMode.READING,
     val totalMs: Long = 0,
     val remainingMs: Long = 0,
-    val isActive: Boolean = false,
-    val isTicking: Boolean = false,
-    val finished: Boolean = false
+    val isActive: Boolean = false, // started and not stopped or finished yet
+    val isTicking: Boolean = false, // counting down right now
+    val finished: Boolean = false // the "time's up" pop-up should be shown
 )
 
+// The reading-mode timer. It lives in SpzApplication, so every screen sees the same one.
 class FocusTimer {
 
     private val scope = MainScope()
@@ -29,8 +30,9 @@ class FocusTimer {
     private val _state = MutableStateFlow(FocusTimerState())
     val state: StateFlow<FocusTimerState> = _state.asStateFlow()
 
+    // What decides if the timer may count down
     private var appVisible = false
-    private var audioScreenOpen = false
+    private var readerOpen = false
     private var audioPlaying = false
 
     fun start(mode: FocusMode, minutes: Int) {
@@ -58,20 +60,26 @@ class FocusTimer {
         _state.update { it.copy(finished = false) }
     }
 
+    // Called by MainActivity when the app goes to the background and back
     fun setAppVisible(visible: Boolean) {
         appVisible = visible
     }
 
+    // Called by the PDF and EPUB readers when they open and close
+    fun setReaderOpen(open: Boolean) {
+        readerOpen = open
+    }
+
+    // Called by the audio player. Only "playing" matters for the timer.
     fun setAudioState(screenOpen: Boolean, playing: Boolean) {
-        audioScreenOpen = screenOpen
         audioPlaying = playing
     }
 
     private fun canCount(mode: FocusMode): Boolean {
-        if (!appVisible) return false
+        if (!appVisible) return false // leaving the app pauses the timer
         return when (mode) {
-            FocusMode.READING -> !(audioScreenOpen && !audioPlaying)
-            FocusMode.LISTENING -> audioPlaying
+            FocusMode.READING -> readerOpen // only while a PDF or EPUB is on screen
+            FocusMode.LISTENING -> audioPlaying // only while an audiobook is playing
         }
     }
 

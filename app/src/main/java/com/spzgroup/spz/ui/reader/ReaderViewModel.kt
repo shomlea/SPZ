@@ -4,14 +4,26 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.spzgroup.spz.data.AppRepository
 import com.spzgroup.spz.data.Book
+import com.spzgroup.spz.timer.FocusTimer
+import com.spzgroup.spz.timer.FocusTimerState
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 
 // Shared by the PDF and EPUB readers (the audio player has its own ViewModel).
-class ReaderViewModel(private val repository: AppRepository) : ViewModel() {
+class ReaderViewModel(
+    private val repository: AppRepository,
+    private val focusTimer: FocusTimer
+) : ViewModel() {
 
     // Reading time that is not yet added to daily progress (less than a minute)
     private var pendingMs = 0L
+
+    // The reading-mode timer, shown in a banner above the reader
+    val timerState: StateFlow<FocusTimerState> = focusTimer.state
+
+    // Reading mode counts down only while a reader is open
+    fun setReaderOpen(open: Boolean) = focusTimer.setReaderOpen(open)
 
     // Loads the book and remembers that it was just opened
     suspend fun openBook(bookId: Long): Book? {

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -23,12 +24,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.spzgroup.spz.data.Book
 import com.spzgroup.spz.ui.AppViewModelFactory
 import com.spzgroup.spz.ui.formatTime
+
+// Sleep timer choices in minutes, 0 = off. Tapping the button moves to the next one.
+private val SLEEP_OPTIONS = listOf(0, 5, 15, 30, 60)
 
 @Composable
 fun AudioPlayerScreen(book: Book, factory: AppViewModelFactory, onClose: () -> Unit) {
@@ -52,6 +58,15 @@ fun AudioPlayerScreen(book: Book, factory: AppViewModelFactory, onClose: () -> U
     Column(
         modifier = Modifier
             .fillMaxSize()
+            // Watch every touch on the screen, without blocking it, to reset the sleep timer
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        awaitPointerEvent(PointerEventPass.Initial)
+                        viewModel.onUserActivity()
+                    }
+                }
+            }
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -108,6 +123,42 @@ fun AudioPlayerScreen(book: Book, factory: AppViewModelFactory, onClose: () -> U
             Button(onClick = { viewModel.skip(15_000) }) { Text("+15 s") }
         }
 
+        Spacer(modifier = Modifier.height(24.dp))
+
+        SleepTimerSection(
+            minutes = state.sleepMinutes,
+            remainingMs = state.sleepRemainingMs,
+            pausedBySleepTimer = state.pausedBySleepTimer,
+            onChange = { viewModel.setSleepTimer(it) }
+        )
+
         Spacer(modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun SleepTimerSection(
+    minutes: Int,
+    remainingMs: Long,
+    pausedBySleepTimer: Boolean,
+    onChange: (Int) -> Unit
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        OutlinedButton(onClick = {
+            val next = (SLEEP_OPTIONS.indexOf(minutes) + 1) % SLEEP_OPTIONS.size
+            onChange(SLEEP_OPTIONS[next])
+        }) {
+            Text(if (minutes == 0) "Sleep timer: off" else "Sleep timer: $minutes min")
+        }
+
+        when {
+            pausedBySleepTimer -> Text("Paused by the sleep timer. Sleep well!")
+            minutes > 0 -> Text(
+                text = "Pauses after $minutes min without touching the screen " +
+                        "(${formatTime(remainingMs)} left)",
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
     }
 }
