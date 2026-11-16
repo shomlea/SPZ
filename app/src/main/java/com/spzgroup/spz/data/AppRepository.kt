@@ -3,6 +3,7 @@ package com.spzgroup.spz.data
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import com.spzgroup.spz.reminders.ReminderScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -14,8 +15,6 @@ import java.util.Locale
 
 enum class ImportResult { SUCCESS, DUPLICATE, UNSUPPORTED, FAILED }
 
-// The only place that talks to the DAOs and to the file system.
-// ViewModels go through this class.
 class AppRepository(
     database: AppDatabase,
     private val context: Context
@@ -23,8 +22,9 @@ class AppRepository(
     private val bookDao = database.bookDao()
     private val reflectionDao = database.reflectionDao()
     private val progressDao = database.dailyProgressDao()
+    private val milestoneDao = database.milestoneDao()
+    private val reminderDao = database.reminderDao()
 
-    // --- Books ---
 
     val books: Flow<List<Book>> = bookDao.getAll()
     val bookCount: Flow<Int> = bookDao.count()
@@ -34,7 +34,6 @@ class AppRepository(
 
     suspend fun markOpened(bookId: Long) = bookDao.markOpened(bookId, System.currentTimeMillis())
 
-    // position = page, chapter or milliseconds, totalUnits = how many of them the book has
     suspend fun saveProgress(bookId: Long, position: Long, totalUnits: Long) =
         bookDao.updateProgress(bookId, position, totalUnits)
 
@@ -50,7 +49,6 @@ class AppRepository(
         }
     }
 
-    // --- Reflections ---
 
     fun reflectionsFor(bookId: Long): Flow<List<Reflection>> = reflectionDao.getForBook(bookId)
 
@@ -58,7 +56,6 @@ class AppRepository(
         reflectionDao.insert(Reflection(bookId = bookId, text = text, rating = rating))
     }
 
-    // --- Daily progress ---
 
     fun todayProgress(): Flow<DailyProgress?> = progressDao.observe(today())
 
@@ -83,14 +80,39 @@ class AppRepository(
         }
     }
 
-    // java.time needs API 26 and our minSdk is 24, so we use SimpleDateFormat
     private fun today(): String =
         SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
-    // --- EPUB ---
 
-    // Unzips the EPUB (only the first time) and returns its chapters in reading order.
-    // Returns an empty list if the file is broken.
+    val milestones: Flow<List<Milestone>> = milestoneDao.getAll()
+
+    suspend fun setDailyGoal(type: String, minutes: Int) =
+        milestoneDao.save(Milestone(type = type, dailyGoalMinutes = minutes))
+
+
+    val reminders: Flow<List<Reminder>> = reminderDao.getAll()
+
+    suspend fun getReminder(reminderId: Long): Reminder? = reminderDao.getById(reminderId)
+
+    suspend fun saveReminder(reminder: Reminder) {
+        val saved = if (reminder.id == 0L) {
+            reminder.copy(id = reminderDao.insert(reminder))
+        } else {
+            reminderDao.update(reminder)
+            reminder
+        }
+        ReminderScheduler.schedule(context, saved)
+    }
+
+    suspend fun deleteReminder(reminder: Reminder) {
+        ReminderScheduler.cancel(context, reminder.id)
+        reminderDao.delete(reminder)
+    }
+
+    suspend fun rescheduleReminders() {
+        reminderDao.getAllOnce().forEach { ReminderScheduler.schedule(context, it) }
+    }
+
     suspend fun loadEpubChapters(book: Book): List<File> = withContext(Dispatchers.IO) {
         try {
             EpubReader.open(File(book.filePath), epubFolder(book))
@@ -99,12 +121,9 @@ class AppRepository(
         }
     }
 
-    // The folder name comes from the copied file, which is unique for every import
     private fun epubFolder(book: Book) = File(context.filesDir, "epub/${File(book.filePath).name}")
 
-    // --- Import from the phone ---
 
-    // Copies the picked file into filesDir/books and saves it as a new book.
     suspend fun importBook(uri: Uri): ImportResult = withContext(Dispatchers.IO) {
         val resolver = context.contentResolver
         val fileName = (getFileName(uri) ?: "Unknown book").replace("/", "_")
@@ -114,7 +133,6 @@ class AppRepository(
 
         val booksDir = File(context.filesDir, "books")
         booksDir.mkdirs()
-        // The timestamp keeps two files with the same name from overwriting each other
         val target = File(booksDir, "${System.currentTimeMillis()}_$fileName")
 
         try {
@@ -127,7 +145,6 @@ class AppRepository(
             return@withContext ImportResult.FAILED
         }
 
-        // We check for duplicates after copying, because only now we know the real size
         val size = target.length()
         if (bookDao.findByTitleAndSize(title, size) != null) {
             target.delete()
@@ -151,7 +168,6 @@ class AppRepository(
         }
     }
 
-    // Some phones report EPUB files as generic data, so we decide by the file extension
     private fun detectFormat(fileName: String): String? =
         when (fileName.substringAfterLast('.', "").lowercase()) {
             "pdf" -> "PDF"
