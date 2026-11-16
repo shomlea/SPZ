@@ -104,6 +104,17 @@ fun RemindersScreen(viewModel: RemindersViewModel, modifier: Modifier = Modifier
             Text("Add reminder")
         }
 
+        // Shows a notification right away, so you can check that notifications work
+        OutlinedButton(
+            onClick = {
+                askForNotifications()
+                ReminderNotifications.showTest(context)
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Send a test notification")
+        }
+
         if (reminders.isEmpty()) {
             Text("No reminders yet. Add one for your commute or before bed.")
         }
