@@ -5,7 +5,7 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
-// When a book is deleted, its reflections are deleted too (CASCADE).
+// When a book is deleted, its reflections are deleted too.
 @Entity(
     tableName = "reflections",
     foreignKeys = [
@@ -22,5 +22,6 @@ data class Reflection(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val bookId: Long,
     val text: String,
-    val rating: Int // 1 to 5
+    val rating: Int,
+    // Plus we should have a DateTime variable that stores the time the reflection was added
 )
