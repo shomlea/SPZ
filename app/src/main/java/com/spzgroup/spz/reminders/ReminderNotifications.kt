@@ -17,16 +17,24 @@ import com.spzgroup.spz.data.Reminder
 
 object ReminderNotifications {
 
-    private const val CHANNEL_ID = "reminders"
+    // A channel's importance can't be changed later, so the louder channel gets a new id
+    private const val CHANNEL_ID = "reading_reminders"
+    private const val OLD_CHANNEL_ID = "reminders"
+    private const val TEST_NOTIFICATION_ID = 999_999
 
+    // Android 8+ needs a channel before showing notifications. Creating it twice is harmless.
     fun createChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = context.getSystemService(NotificationManager::class.java)
+            manager.deleteNotificationChannel(OLD_CHANNEL_ID)
+
+            // HIGH importance makes the notification pop up on top of the screen
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Reading reminders",
-                NotificationManager.IMPORTANCE_DEFAULT
+                NotificationManager.IMPORTANCE_HIGH
             )
-            context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+            manager.createNotificationChannel(channel)
         }
     }
 
@@ -36,6 +44,21 @@ object ReminderNotifications {
                 PackageManager.PERMISSION_GRANTED
 
     fun show(context: Context, reminder: Reminder) {
+        val text = if (reminder.type == "LISTENING") {
+            "Time to listen to your audiobook"
+        } else {
+            "Time to read a few pages"
+        }
+        notify(context, reminder.id.toInt(), reminder.label.ifBlank { "SPZ reminder" }, text)
+    }
+
+    // Shows a notification right away, to check that notifications work
+    fun showTest(context: Context) {
+        notify(context, TEST_NOTIFICATION_ID, "Test reminder", "Notifications are working")
+    }
+
+    private fun notify(context: Context, id: Int, title: String, text: String) {
+        // On Android 13+ the user has to allow notifications first
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED
@@ -43,6 +66,9 @@ object ReminderNotifications {
             return
         }
 
+        createChannel(context)
+
+        // Tapping the notification opens the app
         val openApp = PendingIntent.getActivity(
             context,
             0,
@@ -55,20 +81,15 @@ object ReminderNotifications {
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        val text = if (reminder.type == "LISTENING") {
-            "Time to listen to your audiobook"
-        } else {
-            "Time to read a few pages"
-        }
-
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_alarm)
-            .setContentTitle(reminder.label.ifBlank { "SPZ reminder" })
+            .setContentTitle(title)
             .setContentText(text)
+            .setPriority(NotificationCompat.PRIORITY_HIGH) // for Android 7, which has no channels
             .setContentIntent(openApp)
             .setAutoCancel(true)
             .build()
 
-        NotificationManagerCompat.from(context).notify(reminder.id.toInt(), notification)
+        NotificationManagerCompat.from(context).notify(id, notification)
     }
 }
